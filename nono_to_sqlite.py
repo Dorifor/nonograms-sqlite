@@ -3,14 +3,47 @@ from datetime import timedelta
 import time
 
 def create_database():
-    con = sqlite3.connect("nonograms.db")
+    con = sqlite3.connect("test.db")
+    cur = con.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "authors" (
+            "author_id"	int NOT NULL,
+            "name"	varchar(50),
+            PRIMARY KEY("author_id")
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS "nonograms" (
+            "nonogram_id"	int NOT NULL,
+            "title"	varchar(100),
+            "is_adult"	boolean,
+            "column_count"	int,
+            "row_count"	int,
+            "colors_count"	int,
+            "colors"	varchar(255),
+            "column_cells"	varchar(255),
+            "column_colors"	varchar(255),
+            "row_cells"	varchar(255),
+            "row_colors"	varchar(255),
+            "author_id"	int,
+            PRIMARY KEY("nonogram_id"),
+            FOREIGN KEY("author_id") REFERENCES "authors"("author_id")
+        );
+    """)
+
+    con.commit()
+    con.close()
+
 
 def insert_data():
     start_time = time.time()
-    con = sqlite3.connect("nonograms.db")
+    con = sqlite3.connect("test.db")
     cur = con.cursor()
 
-    batch = []
+    nonograms_batch = []
+    authors_batch = []
 
     with open('archive.nono', 'r', encoding="utf8", errors="ignore") as file:
         for line in file:
@@ -62,12 +95,11 @@ def insert_data():
             if row_colors:
                 row_colors = ';'.join(row_colors)
 
-            # if author_id:
-            #     author_data = (int(author_id), author_name)
-            #     batch.append(author_data)
-            #     batch = list(set(batch))
-
-            if not author_id:
+            if author_id:
+                author_data = (int(author_id), author_name)
+                authors_batch.append(author_data)
+                authors_batch = list(set(authors_batch))
+            else:
                 author_id = None
 
             nonogram_data = (
@@ -85,19 +117,30 @@ def insert_data():
                 author_id
             )
 
-            batch.append(nonogram_data)
+            nonograms_batch.append(nonogram_data)
 
-            if len(batch) > 50:
-                # cur.executemany("INSERT OR IGNORE INTO authors(author_id, name) VALUES(?, ?)", batch)
-                cur.executemany("INSERT OR IGNORE INTO nonograms VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", batch)
+            if len(authors_batch) > 50:
+                cur.executemany("INSERT OR IGNORE INTO authors(author_id, name) VALUES(?, ?)", authors_batch)
                 con.commit()
-                batch.clear() # added in python 3.13 IF IT'S NOT WORKING FOR YOU IT MAY BE WHY
+                authors_batch.clear()
+
+            if len(nonograms_batch) > 50:
+                cur.executemany("INSERT OR IGNORE INTO nonograms VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", nonograms_batch)
+                con.commit()
+                nonograms_batch.clear()  # added in python 3.13 IF IT'S NOT WORKING FOR YOU IT MAY BE WHY
+
+    if len(authors_batch) > 0:
+        cur.executemany("INSERT OR IGNORE INTO authors(author_id, name) VALUES(?, ?)", authors_batch)
+        con.commit()
+
+    if len(nonograms_batch) > 0:
+        cur.executemany("INSERT OR IGNORE INTO nonograms VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", nonograms_batch)
+        con.commit()
 
     con.close()
     end_time = time.time()
 
     print(f"time to store into sqlite: {str(timedelta(seconds=end_time - start_time))}")
-
 
 
 if __name__ == '__main__':
